@@ -3,6 +3,10 @@
 
 #include "itasksys.h"
 
+#include "threadpool.h"
+#include <memory>
+#include <latch>
+
 /*
  * TaskSystemSerial: This class is the student's implementation of a
  * serial task execution engine.  See definition of ITaskSystem in
@@ -40,6 +44,30 @@ class TaskSystemParallelSpawn: public ITaskSystem {
 
 };
 
+
+class CompositeTaskWork: public ThreadTask {
+    public:
+        CompositeTaskWork(IRunnable* task, int task_id, int num_total_tasks, std::shared_ptr<std::latch> latch): 
+            task(task), task_id(task_id), num_total_tasks(num_total_tasks), latch(latch) {};
+
+        void run(){
+            this->task->runTask(task_id, num_total_tasks);
+            latch->count_down();
+            if (DEBUG)
+                printf("Task %d done\n", task_id);
+        }
+
+        int id(){
+            return task_id;
+        }
+
+    private:
+        IRunnable* task;
+        int task_id;
+        int num_total_tasks;
+        std::shared_ptr<std::latch> latch;
+};
+
 /*
  * TaskSystemParallelThreadPoolSpinning: This class is the student's
  * implementation of a parallel task execution engine that uses a
@@ -55,6 +83,8 @@ class TaskSystemParallelThreadPoolSpinning: public ITaskSystem {
         TaskID runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
                                 const std::vector<TaskID>& deps);
         void sync();
+    private:
+        std::unique_ptr<SingleQueueThreadPool> threadpool;
 };
 
 /*

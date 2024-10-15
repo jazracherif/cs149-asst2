@@ -1,11 +1,9 @@
 #include "tasksys.h"
 #include <iostream>
 
-#include <thread>
 #include <vector>
 #include <sstream>
 
-#define DEBUG 1
 
 IRunnable::~IRunnable() {}
 
@@ -94,7 +92,7 @@ void TaskSystemParallelSpawn::runTaskIds(IRunnable* runnable, int startId, int e
 
 void TaskSystemParallelSpawn::run(IRunnable* runnable, int num_total_tasks) {
 
-    printf("TaskSystemParallelSpawn::run(): %d \n", num_total_tasks);
+    // printf("TaskSystemParallelSpawn::run(): %d \n", num_total_tasks);
 
     std::vector<std::thread> threads;
 
@@ -150,28 +148,31 @@ const char* TaskSystemParallelThreadPoolSpinning::name() {
 }
 
 TaskSystemParallelThreadPoolSpinning::TaskSystemParallelThreadPoolSpinning(int num_threads): ITaskSystem(num_threads) {
-    //
-    // TODO: CS149 student implementations may decide to perform setup
-    // operations (such as thread pool construction) here.
-    // Implementations are free to add new class member variables
-    // (requiring changes to tasksys.h).
-    //
+    // Create a threadpool with a shared queue for all worker threads
+    printf("Creating `TaskSystemParallelThreadPoolSpinning` with number of threads: %d \n", num_threads);  
+
+    this->threadpool = std::make_unique<SingleQueueThreadPool>(num_threads);
+
 }
 
 TaskSystemParallelThreadPoolSpinning::~TaskSystemParallelThreadPoolSpinning() {}
 
 void TaskSystemParallelThreadPoolSpinning::run(IRunnable* runnable, int num_total_tasks) {
 
+    // printf("TaskSystemParallelThreadPoolSpinning::run(): %d \n", num_total_tasks);
 
-    //
-    // TODO: CS149 students will modify the implementation of this
-    // method in Part A.  The implementation provided below runs all
-    // tasks sequentially on the calling thread.
-    //
+    std::shared_ptr<std::latch> work_done = std::make_shared<std::latch>(num_total_tasks);
+    std::vector<std::shared_ptr<CompositeTaskWork>> work;
 
     for (int i = 0; i < num_total_tasks; i++) {
-        runnable->runTask(i, num_total_tasks);
+        work.emplace_back(std::make_unique<CompositeTaskWork>(runnable, i, num_total_tasks, work_done));
     }
+    for (auto& w: work)
+        this->threadpool->enqueue(w);
+
+    // Wait for work to be done
+    work_done->wait();
+    // printf("All work done!\n");
 }
 
 TaskID TaskSystemParallelThreadPoolSpinning::runAsyncWithDeps(IRunnable* runnable, int num_total_tasks,
